@@ -1,0 +1,159 @@
+---
+title: "Laboratorio 2"
+author: "Cristian Solorzano"
+date: "20 de mayo de 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1.  Describir un algoritmo basado en el método de inversión que permita generar
+    observaciones de una variable aleatoria con distribución exponencial "inflada 
+    con ceros" (*zero inflated*), con función de distribución: 
+    $$F(x)=\left\{
+    \begin{array}{ll}
+    0 & \text{si } x < 0,\\
+    \pi + \left( 1-\pi \right)\left(1-e^{-\lambda x}\right) & \text{si } x \ge 0.
+    \end{array}
+    \right.$$
+    
+### Solución
+$$Consideremos \ \ U \sim \mathcal{U}\left[0,1\right] \ entonces:\\  U=\pi + \left( 1-\pi \right)\left(1-e^{-\lambda x}\right)$$
+$$\frac{U-\pi}{\left( 1-\pi \right)} = \left(1-e^{-\lambda x}\right)$$
+$$\frac{U-\pi}{\left( 1-\pi \right)} -1 = \left(-e^{-\lambda x}\right)$$
+$$\frac{U-\pi}{\left( 1-\pi \right)} -\frac{\left( 1-\pi \right)}{\left( 1-\pi \right)} = \left(-e^{-\lambda x}\right)$$
+$$\frac{U-1}{\left( 1-\pi \right)}  = \left(-e^{-\lambda x}\right)$$
+$$\frac{U-1}{\left( \pi - 1 \right)}  = \left(e^{-\lambda x}\right)$$
+$$Ahora\ es\ importante \ notar \ que \   U-1 \cong 1-U \ y\ así\ se\ tiene\ que:$$
+
+$$\log\left(\frac{1-U}{\left( \pi - 1 \right)}\right)  = -\lambda x$$
+$$\frac{\log\left(1-U\right) - \log\left( \pi - 1 \right)}{-\lambda}  =  x$$
+```{r}
+#Para hallar la funcion de densidad, se derivo la funcion de distribución y se obtuvo:
+ddensidad <- function(x,lambda){
+  lambda*(pi-1)*(exp(-lambda*x))
+}
+
+rdejer1 <- function(lambda){
+  U <- runif(1)
+  
+    return((log(1-U)-log(pi-1))/-lambda)
+}
+
+#Fijamos un valor para lambda
+lambda<-0.05
+  
+rdejer1n <- function(n = 1000) {
+    x <- numeric(n)
+    for(i in 1:n) x[i]<-rdejer1(lambda)
+    return(x)
+}
+
+nsim <- 10^4 #numero de simulaciones
+
+system.time(x <- rdejer1n(nsim))
+
+hist(x, breaks = "FD", freq = FALSE)
+curve(ddensidad(x,lambda), add = TRUE, col="red")
+```
+
+Es interesante observar que 1-u sigue la misma distribucion que u-1 si u es uniforme 0,1.
+Y de aqui radica el problema de la simulacion, superado dicho problema, es facil simular la variable aleatoria mediante el metodo de inversion.
+
+
+2.  Estamos interesados en una variable con función de densidad 
+    $Gamma(s,r)$:
+    $$f(x)=\frac{r^{s}}{\Gamma (s)}x^{s-1}e^{-rx}\text{ si }x\geq 0,$$
+    (siguiendo la notación de la función `dgamma(x, shape, rate)` de `R`).
+    Escribir el código necesario para generar, por el método de
+    aceptación-rechazo, una muestra de $n$ observaciones de una
+    distribución $Gamma(3,3)$ empleando como densidad auxiliar una
+    exponencial (`dexp(x, rate)`):
+    $$g(x)=\lambda e^{-\lambda x}\text{ si }x\geq 0.$$
+    (NOTA: No emplear las funciones de densidad implementadas en R).
+    
+    1.  Aproximar numéricamente el parámetro óptimo ($\lambda
+        _{opt}$) y la cota óptima ($c_{opt}$) de la densidad auxiliar y
+        compararlos con los valores teóricos.
+```{r}
+ddensidad <- function(x,s=3,r=3){
+  ((r^(s)/(gamma(s))))*(x^(s-1))*(exp(-r*x))
+}
+fopt <- function(lambda) {
+  # Obtiene c fijado lambda
+  optimize(f = function(x){ddensidad(x)/dexp(x,lambda)}, maximum=TRUE, interval=c(0,10))$objective
+}
+
+res <- optimize(f=function(x){fopt(x)}, interval=c(0,10))
+
+lambda.opt2 <- res$minimum
+c.opt2 <- res$objective
+
+lambda.opt2
+# El calculo del valor teorico lo realize con wolfram, asi el valor teórico de lambda sera: λopt=1/x entonces λopt = 1
+
+c.opt2
+#El calculo del valor teorico lo planteo en wolfram, asi el valor teórico de c sera: valor teórico copt = 1.827 
+
+```
+        
+    2.  Generar una muestra de 1000 observaciones de la distribución de
+        interés tomando como semilla inicial los cuatro primeros dígitos
+        de la CI. Obtener el tiempo de CPU que tarda en generar la
+        secuencia y calcular el número medio de generaciones de la
+        distribución auxiliar. Realice un contraste de hipótesis de 
+        Bondad de Ajuste
+        
+```{r}
+nsim <- 10^3
+ngrupo<-1722
+set.seed(ngrupo)
+ngen <- 0
+rnormAR <- function() {
+  while (TRUE) {
+    U <- runif(1)
+    X <- rexp(1,lambda.opt2)
+    ngen <<- ngen+1 
+    if (c.opt2 * U * dexp(X, lambda.opt2) <= ddensidad(X)) return(X)
+  }
+}
+rnormARn <- function(n=1000) {
+# Simulacion n valores N(0,1)
+    x <- numeric(n)
+    for(i in 1:n) x[i]<-rnormAR()
+    return(x)
+}
+
+ngen <- 0
+system.time(x <- rnormARn(nsim))
+{
+cat("\nNº de generaciones = ", ngen)
+cat("\nNº medio de generaciones = ", ngen/nsim)
+cat("\nProporción de rechazos = ", 1-nsim/ngen, "\n")
+}
+
+#Para una prueba de bondad de ajuste, utilizaremos el test de Kolmogrov-Smirnov, comparandolo con la distribucion gamma implementada en R
+
+ks.test(x,"pgamma",3,3)
+
+
+```
+
+Dado que el p-valor es muy pequeño, se acepta el que nuestra simulacion se comporta como una función $Gamma(3,3)$
+
+   
+    3.  Representar el histograma y compararlo con la densidad teórica.
+
+```{r}
+# Grafico
+
+hist(x, breaks="FD", freq=FALSE)
+curve(ddensidad(x), add=TRUE, col = "red")
+```
+
+Dado que en la gráfica del histograma de los valores simulados, se acercan a la densidad f(x) se puede afirmar que el algoritmo da una buena simulacion lo cual era esperado pues el test de Kolmogrov-Smirnov confirmaba la aceptacion de $H_{0}:x \sim Gamma(3,3)$

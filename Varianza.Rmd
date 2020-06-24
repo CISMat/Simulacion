@@ -1,0 +1,576 @@
+---
+title: "Deber capitulo 7"
+author: "Cristian Solórzano y Génesis Moreno"
+date: "28/7/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(distrEx)
+library(rmutil)
+```
+
+## Ejercicio 1
+
+__Considerese el algoritmo encontrado en el ejercicio 3, propuesto en el tema 3. Si posteriormente se requiere proceder de forma que los impactos cercanos y lejanos al centro estén equilibrados. ¿Cómo se podrían simular ahora las distacnias al centro de 10 impactos?__
+
+
+Tomaremos dos estratos, los de los 50% mas cercanos , y la de los 50% mas lejanos  para que esten equilibrados.
+La forMa de garantizar que  de nuestra muestra de 10 valores tengamos 5 y 5 valores en cada estrato consiste en elegir $U \sim U[0,0.5]$  Y $U \sim U[0.5,1]$ , luego aplicamos el metodo de muestreo estartificado de la siguiente manera, y obtenemos su varianza 
+
+```{r }
+
+#USAMOS LA TECNICA DE VARIANZA DE MUESTREO ESTRATIFICADO 
+
+ddensidad<- function(x){
+  3*(x^2)
+}
+
+NSIM <- 100
+n<-10
+
+rddistrib <- function(n){
+  U <- runif(n)
+  for (i in 1:n){
+    if(i<=5){U[i]<- 0.5*U[i]+0.5}
+    else {U[i]<- 0.5*U[i]}
+  }
+    return(U^(1/3))
+  
+}
+
+rddistribn <- function(NSIM,n) {
+  x <- matrix(0,nrow = NSIM,ncol=n)
+  for(i in 1:NSIM){ x[i,]<-rddistrib(n)}
+  return(x)
+}
+
+#OBTENEMOS LA VARIANZA DE LA SIMULACION
+ varianza<- function(x,NSIM,n){
+   desv <- c(n)
+   var<- c(n)
+   for (i in 1:NSIM){
+     desv[i] <- sd(x[i,])
+     var[i] <- (desv)^2
+     var_total =sum(var[i])*(1/n^2)
+     return (var_total)
+   }
+ }
+
+
+set.seed(1725)
+system.time(x <- rddistribn(NSIM,n))
+var1<-varianza(x,NSIM,n)
+var1
+hist(x, breaks = "FD", freq = FALSE)
+ curve(ddensidad(x), add = TRUE)
+```
+
+Para verificar que la varianza se redujo efectivamente, simularemos estas variables por el metodo de inversion  sin aplicar esta tecnica de reduccion de varianza con lo cual tenemos que la varianza es de:
+```{r}
+ddensidad<- function(x){
+  3*(x^2)
+}
+
+rddistrib <- function(){
+  U <- runif(1)
+    return(U^(1/3))
+}
+
+rddistribn <- function(n = 1000) {
+  x <- numeric(n)
+  for(i in 1:n) x[i]<-rddistrib()
+  return(x)
+}
+
+set.seed(1725)
+system.time(x <- rddistribn(10^3))
+desv<- sd(x)
+var2 <-(desv)^2
+var2
+
+hist(x, breaks = "FD", freq = FALSE)
+ curve(ddensidad(x), add = TRUE)
+```
+
+Con esto vemos que logramos una distribucion equilibrada de las distancias cercanas y lejanas y tambien que  la varianza se redujo a 
+```{r}
+var1
+var2
+reduccion <- var2-var1
+reduccion
+```
+
+
+## Ejercicio 2
+
+__Una nueva componente llega cada 40 segundos a una cadena de ensamblado. El tiempo necesario para ensamblar dicha componente a la pieza matriz se supone una variable aleatoria con media de 30 segundos (Considerar: $N(30,1)$, $N(30,5)$ y $\Gamma(2,60)$). Si un tiempo de ensamblado es superior a 40 segundos, las componentes que van llegando se acumulan hasta que se les vaya dando salida. Dar un algorito que permita responder a las siguientes preguntas ¿Cúal es la probabilidad de que una componente que llega tenga que esperar?, ¿Cúal es la probabilidad de que estén mas de tres piezas esperando?__
+
+
+Definiendo la variable aleatoria _X=:_ tiempo de ensamble y utilizando el metodo de reduccion de varianza por variables antieteticas, tenemos que:
+
+```{r}
+#media de ensamblaje
+u<-30
+#tiempo de llegada de pieza
+intervalo<-40
+#X:tiempo de ensamble
+
+#----------------------
+
+sd1<-5
+
+temp_cola<-function(nsim,x){
+  for(i in 1:nsim){
+    temp_espera<-x[i]-intervalo
+    if(temp_espera>0){
+      x[i+1]<-x[i+1]+temp_espera
+    }
+    else{x[i]<-x[i]}
+  }
+  return(x)
+}
+
+#Proceso1
+x<-rnorm(1000,u,sd1)
+
+#Variable anti-etetica 
+rdnorm <- function(nsim, u, sd){
+for (i in 1:(nsim/2)){
+ k<- 2*i-1
+ l<-2*i
+  z1 <- rnorm(1,u,sd)
+  x[k] <- z1
+  z2 <- 2*u-z1
+  x[l] <- z2
+}
+return(x)
+}
+
+y<-rdnorm(1000,u,sd1)
+
+hist(x,breaks = "FD",freq = FALSE,
+     xlab = "Tiempo de ensamble")
+
+hist(y,breaks = "FD",freq = FALSE,
+     xlab = "Tiempo de ensamble")
+```
+
+la probabilidad de que una componente que llega tenga que esperar es de: 
+```{r}
+#probabididad de esperar
+#-
+sum(x>intervalo)/1000
+sum(y>intervalo)/1000
+```
+
+la probabilidad de que estén mas de tres piezas esperando sera:
+```{r}
+#probabilidad de una cola de 3 piezas
+z<-temp_cola(1000,x)
+z1<-temp_cola(1000,y)
+sum(z>3*intervalo)/1000
+sum(z1>3*intervalo)/1000
+```
+
+y el porcentaje de reducción de la varianza esta dado por:
+```{r}
+var1<- sd(x)^2
+var2 <-sd(y)^2
+reduccion <- 100*(var1-var2)/var1
+reduccion
+```
+
+```{r}
+#Proceso2
+sd2<-1
+x1<-rnorm(1000,u,sd2)
+y1<-rdnorm(1000,u,sd2)
+hist(x1,breaks = "FD",freq = FALSE,xlab ="Tiempo de ensamble" )
+hist(y1,breaks = "FD",freq = FALSE,xlab ="Tiempo de ensamble" )
+```
+
+la probabilidad de que una componente que llega tenga que esperar es de: 
+```{r}
+#probabididad de esperar
+#-
+sum(x1>intervalo)/1000
+sum(y1>intervalo)/1000
+```
+la probabilidad de que estén mas de tres piezas esperando sera:
+```{r}
+#probabilidad de una cola de 3 piezas
+z<-temp_cola(1000,x1)
+z1<-temp_cola(1000,y1)
+sum(z>3*intervalo)/1000
+sum(z1>3*intervalo)/1000
+```
+y el porcentaje de reducción de la varianza esta dado por:
+```{r}
+var1<- sd(x1)^2
+var2 <-sd(y1)^2
+reduccion <- 100*(var1-var2)/var1
+reduccion
+```
+Para el caso de que el tiempo de ensamble siga una gamma tenemos:
+
+```{r}
+#proceso3
+x2<-rgamma(1000,60,2)
+z<-rnorm(1000)
+reg <- lm(x2 ~ z)$coef
+
+#Variable antietética 
+y2 <- x2 - reg[2]*(z)
+
+hist(x2,breaks = "FD",freq = FALSE,xlab = "Tiempo de espera")
+hist(y2,breaks = "FD",freq = FALSE,xlab = "Tiempo de espera")
+```
+
+la probabilidad de que una componente que llega tenga que esperar es de: 
+```{r}
+#probabididad de esperar
+#-
+sum(x2>intervalo)/1000
+sum(y2>intervalo)/1000
+```
+
+la probabilidad de que estén mas de tres piezas esperando sera:
+```{r}
+#probabilidad de una cola de 3 piezas
+z<-temp_cola(1000,x2)
+z1<-temp_cola(1000,y2)
+sum(z>3*intervalo)/1000
+sum(z1>3*intervalo)/1000
+```
+
+y el porcentaje de reducción de la varianza esta dado por:
+```{r}
+var1<- sd(x2)^2
+var2 <-sd(y2)^2
+reduccion <- 100*(var1-var2)/var1
+reduccion
+```
+## Ejercicio 3
+
+__El número de toneladas de pan producidas diariamente por una empresa panificadora tiene distribución de Pareto con parámetros 3 y 2. Suponiendo que la demanda diaria de pan (en toneladas) tiene distribución N(3,0.5) y que es independiente de la producción, clacular la probabilidad de que n día concreto la demanda no sea satisfecha. Suponiendo una pérdida de 0.05 euros por cada kilo de pan no vendido y una penalización de 0.2 euros por cada kilo de pan demandado por clientes  y no entregado (por falta de existencias), dar un lgoritmo para calcular las pérdidas medias diarias en concepto de excedentes o demandas insatisfechas.__
+
+Tenemos las siguientes variables:
+__X:__ Toneladas de pan producidas.
+__Y:__ Demanda diaria de pan en toneladas.
+
+cuyas distribuciones son:
+
+
+```{r}
+
+# X:numero de toneladas de pan producidas
+x<-rpareto(1000,3,2)
+hist(x,breaks = "FD",freq = FALSE,xlab = "ton de pan prod")
+
+desv<- sd(x)
+var1<- (desv)^2
+
+# Y:demanda diaria en toneladas
+y<-rnorm(1000,3,0.5)
+hist(y,breaks = "FD",freq = FALSE,xlab = "deman diaria de pan")
+
+```
+
+El proceso de simulación queda de la siguiente manera:
+
+```{r}
+#simulacion
+
+nsim<-1000
+r<-0
+s<-0
+p<-c()
+q<-c()
+for(i in 1:nsim)
+{
+  x<-rpareto(1,3,2) #produccion
+  y<-rnorm(1,3,0.5) #demanda
+  if(y>x)
+  {
+    r<- r+1 #cuneta numero de personas que no son atendidas
+    #penalizacion
+    q[r]<-0.2*(y-x)*1000
+  }
+  else
+  {
+    #perdida
+    s<-s+1 #cuenta numero de excedentes
+    p[s]<-0.05*abs(x-y)*1000
+  }
+}
+```
+
+La probabilidad de que la demanda no sea satisfecha es:
+
+
+```{r}
+#probabilidad
+r/nsim
+```
+
+Las pérdidas medias diarias  serian:
+
+```{r}
+#perdidads media diaria
+perdidas_totales <-c(p,q)
+per_media<- mean(perdidas_totales)
+per_media
+
+```
+
+Ahora para aplicar la tecnica de reduccion de varianza  con variables antiteticas para la prduccion de toneladas  debemos crear la dependencia de las variables x e y al obtenerlas por el metodo de inversión por lo que obtenemos las distrbuciones por el siguiente algoritmo:
+
+Consideremos la funcion de Distribucion de Pareto de parametros $X_m= 3\,  y \, \alpha=2$
+
+$$ F(x)= (\frac{x_m}{x})^ \alpha$$
+su funcion inversa es 
+
+$$ x= \frac{x_m}{(U)^\frac{1}{\alpha}}$$
+```{r}
+
+#Generacion de X con reduccion de varianza
+nsim <-1000
+x<- c(nsim)
+xm<-3
+alpha<-2
+rddistribn <- function(nsim, xm,alpha ){
+
+for (i in 1:(nsim/2)){
+ k<- 2*i-1
+ l<-2*i
+  U1 <- runif(1)
+  x[k] <-xm/((U1)^(1/alpha))
+  U2<- 1-U1
+  x[l] <-xm/((U2)^(1/alpha))
+}
+return(x)
+}
+
+set.seed(1725)
+system.time(x <- rddistribn(nsim,xm,alpha))
+desv<- sd(x)
+var2 <- (desv)^2
+
+
+hist(x, freq = FALSE)
+
+```
+
+Ahora aplicando a la simulacion realizada anteriormente, a partir de la creacion de la variable x con una tecnica de reduccion de varianza se tiene.
+```{r}
+#simulacion
+
+nsim<-1000
+r<-0
+s<-0
+p<-c()
+q<-c()
+x<-rddistribn(nsim, xm,alpha) #produccion
+for(i in 1:nsim)
+{
+  y<-rnorm(1,3,0.5) #demanda
+  if(y>x[i])
+  {
+    r<- r+1 #cuneta numero de personas que no son atendidas
+    #penalizacion
+    q[r]<-0.2*(y-x[i])*1000
+  }
+  else
+  {
+    #perdida
+    s<-s+1 #cuenta numero de excedentes
+    p[s]<-0.05*abs(x[i]-y)*1000
+  }
+}
+
+```
+
+La probabilidad de que la demanda no sea satisfecha es:
+
+
+```{r}
+#probabilidad
+r/nsim
+```
+
+Las pérdidas medias diarias  serian:
+
+```{r}
+#perdidads media diaria
+perdidas_totales <-c(p,q)
+per_media<- mean(perdidas_totales)
+per_media
+
+```
+Finalmente veamos que la varianza para la produccion de toneladas se redujo a:
+```{r}
+var1
+var2
+reduccion <- var1-var2
+reduccion
+```
+
+## Ejercicio 4
+
+__En una cadena productiva, el tiempo que tarda una componente en llegar a una máquina ensambladora desde que llegó la pieza anterior sigue una distribucion exponencial de media 10 segundos. El tiempo (en segundos) que emplea la máquina ensambladora con cada componente se ajusta a una distribución $\Gamma(3,20)$. Cada vez que una nueva componente llega a la fase de ensamblaje y la máquina está ocupada, dicha pieza se desvía a otra linea de producción distinta. Dar un algoritmo, lo más preciso posible, para porde aproximar mediante simulación el porcentaje de tiempo que la máquina ensambladora perderá esperando la llegada de una nueva pieza.__
+
+
+Tenemos que:
+
+__X__: Tiempo que tarda en llegar una pieza a la máquina ensambladora.
+__Y__: Tiempo que se demora en la máquina  ensabladora.
+
+
+```{r}
+#X: tiempo que tarde en llegar una pieza a la maquina ensambladora
+nsim<-1000
+x<-rexp(nsim,1/10)
+hist(x,breaks = "FD",freq = FALSE,xlab = "tiempo de llegada despues de la otra")
+
+#Y: tiempo que se demora en la maquina  ensabladora
+y<-rgamma(nsim,3,20)
+hist(y,breaks = "FD",freq = FALSE,xlab = "tiempo de maquina con cada pieza")
+```
+
+Simulación:
+
+```{r}
+#simulacion
+
+x<-rexp(nsim,1/10) #tiempo de llegada
+y<-rgamma(nsim,3,20) #tiempo de demora
+
+#Variables de control
+u<-runif(nsim)
+reg <- lm(x ~ u)$coef
+reg1 <- lm(y ~ u)$coef
+
+#Variable antietética llegada
+xa <- x - reg[2]*(u-1)
+
+#Variable antietética demora
+ya <- y - reg1[2]*(u-1)
+
+100*(var(x)-var(xa))/var(x)
+100*(var(y)-var(ya))/var(y)
+
+
+```
+
+
+Promedio de tiempo perdido:
+
+```{r}
+tiempo<-function(nsim,u,v){
+s<-0
+tp<-c()
+for(i in 1:nsim)
+{
+  if(v[i]>u[i])
+  {
+    s<-s+1
+    tp[s]<-(v[i]-u[i])+u[i+1] #tiempo perdido + tiempo de llegada de la siguiente pieza
+  }
+}
+return(tp)
+}
+
+```
+
+Y el tiempo perdido será:
+```{r}
+srv<-tiempo(nsim,x,y)
+mean(srv)
+
+```
+
+## Ejercicio 5
+
+__Una máquina produce tiras de goma de longitud aleatoria con ditribución exp(2) (en metros). Después las tiras de goma se pasan a otra máquina que las estira hasta que rompen en dos (para comprobar su elasticidad). Suponiendo que el lugar por donde se rompe cada tira es aleatorio y con distribución uniforme a lo largo de toda su longitud, describir detalladaente un algoritmo que simule las longitudes de los dos trozos en los que se rompe cada goma.__
+
+Para ello, usamos el siguiente algoritmo:
+
+```{r}
+set.seed(1725)
+#X: longitud de tiras de goma
+x<-rexp(1000,2)
+hist(x,breaks = "FD",freq = FALSE,xlab = "longitud de tiras")
+
+#simulacion
+nsim<-1000
+puntos<-matrix(NA,nrow = nsim,ncol = 2)
+for (i in 1:nsim) {
+  a<-0 #cota inferior
+  b<-x[i] #cota superior de cada barita
+  m<-runif(1,a,b) #longitud de corte de cada barita
+  punto<-c(m,b-m)
+  puntos[i,]<-punto #longitud en la que divide a cada bara
+}
+
+var1 <- (sd(x))^2
+var1
+
+
+```
+
+
+Las  5 primeras baritas se dividen de la siguiente manera:
+
+```{r,echo=FALSE}
+puntos[1:5,]
+```
+Ahora aplicaremos la técnica de reducción de varinza por medio de variables antitéticas, para esto creamos la correlacion en el algoritmo de inversion, esto ocurre al momento de generar valores en una uniforme (0,1), para esto modificaremos el algoritmo de inversión de la siguiente manera:
+
+consideremos 
+$$F(x)= 1-exp(- \lambda x)$$
+considerando el algoritmo de inversón tenemos 
+$$x= -\frac{ln(U)}{\lambda}$$
+
+```{r}
+#Generacion de X con reduccion de varianza
+nsim <-1000
+x<- c(nsim)
+lambda <- 2
+
+rddistribn <- function(nsim, lambda ){
+
+for (i in 1:(nsim/2)){
+ k<- 2*i-1
+ l<-2*i
+  U1 <- runif(1)
+  x[k] <-log(U1)/(-1*lambda)
+  U2<- 1-U1
+  x[l] <-log(U2)/(-1*lambda)
+}
+return(x)
+}
+
+set.seed(1725)
+system.time(x <- rddistribn(nsim,lambda))
+desv<- sd(x)
+var2 <- (desv)^2
+var2
+
+
+hist(x, freq = FALSE)
+
+```
+
+
+Con esto podemos ver que la varianza se redujo un total de:
+
+```{r,echo=FALSE}
+var1
+var2
+reduccion <- var1-var2
+reduccion
+```
+
+-----

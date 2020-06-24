@@ -1,0 +1,98 @@
+---
+title: "Escenario Exponencial con parámetro = 1"
+author: "Cristian Solórzano & Génesis Moreno"
+date: "18 de julio de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(123)
+N <- 100
+n <- 4
+k <- N/n
+B <- 200
+alpha <- 0.05
+muestra <- rexp(N,1)
+xbar <- mean(muestra)
+submues <- matrix(muestra,nrow = k,ncol = n)
+xbarsub <- apply(submues, 1, mean) 
+s2sub <- apply(submues, 1, var) 
+xbarbar <- mean(xbarsub)
+S2 <- mean(s2sub) 
+S <- sqrt(S2)
+plot(xbarsub,type="l")
+points(xbarsub)
+abline(h=xbarbar, col = "red")
+```
+
+
+Para los límites de control asintóticos, se generaron:
+
+```{r}
+##Asintótico
+LIas <- xbarbar-qnorm(1-alpha/2)*(S/sqrt(n))
+LSas <- xbarbar+qnorm(1-alpha/2)*(S/sqrt(n))
+LIas #Limite inferior
+LSas #Limite superior
+plot(xbarsub,type="l")
+points(xbarsub)
+abline(h=xbarbar, col = "red")
+abline(h=LIas, col = "green")
+abline(h=LSas, col = "green")
+```
+
+
+Sean $x_{1},x_{2},...,x_{n}$ variableas aleatorias tales que $x_{i}\sim Exp(\lambda), \ \ ( \forall i \in [1,n])$, entonces $\sum_{i=1}^{n} x_{i} \sim Gamma(n,\lambda)$
+
+Ahora, recordemos que para una cte positiva ($C>0$), se tiene que: 
+$$X \sim Gamma(n,\lambda), \ \ entonces \ \ CX \sim Gamma(n,C\lambda)$$. 
+
+Por lo tanto: $$Y = \frac{\sum_{i=1}^{n} x_{i}}{n} \sim Gamma(n,\frac{\lambda}{n})$$
+
+$E[Y] = n*\frac{\lambda}{n} = \lambda = 1$
+ 
+ 
+$Var[Y] = n*\frac{\lambda^{2}}{n^{2}} =\frac{\lambda^{2}}{n} = \frac{1}{4}$
+```{r}
+##Exacto
+mu <-1
+sigma <- 1/4
+
+LIex <- mu-qgamma(alpha,4,1/4)*(sigma/sqrt(n))
+LSex <- mu+qgamma(alpha,4,1/4)*(sigma/sqrt(n))
+
+LIex #Limite inferior 
+LSex #Limite superior
+
+plot(xbarsub,type="l")
+points(xbarsub)
+abline(h=xbarbar, col = "red")
+abline(h=LIex, col = "blue")
+abline(h=LSex, col = "blue")
+```
+
+
+```{r}
+###Boot
+stat.boot <- matrix(NA,nrow = B,ncol = k)
+xbarsub.boot <- matrix(NA,nrow = B,ncol = k)
+xbarbar.boot <- vector()
+for(i in 1:B){
+muestra.boot <- sample(muestra,replace = T)
+submues.boot <- matrix(muestra.boot,nrow = k,ncol = n)
+xbarsub.boot[i,] <- apply(submues.boot, 1, mean) 
+xbarbar.boot[i] <- mean(xbarsub.boot[i,])
+
+stat.boot[i,] <- sqrt(n)*(xbarsub.boot[i]-xbarbar)
+}
+hist(stat.boot)
+t <- quantile(stat.boot,c(1-alpha))
+LIboot <- mean(xbarbar.boot)-t[1]/sqrt(n)
+LSboot <- mean(xbarbar.boot)+t[1]/sqrt(n)
+LIboot #Limite inferior
+LSboot #Limite superior
+```

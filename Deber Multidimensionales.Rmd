@@ -1,0 +1,253 @@
+---
+title: "Simulacion de variables multivariadas"
+author: "Genesis Moreno e Ivan Solorzano"
+date: "24/5/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Ejercicio 1
+
+La diferencia en precio (X) y en tiempo de vida (Y) de un monitor de 17 pulgadas , expresados en tanto por uno con respecto a la media de mercado , puede suponerse una variable aleatoria (X,Y), con funcion de densidad dada por :
+$$
+f(x,y) =\begin{cases}
+ \frac {3}{16} [2-(x^2 +y^2 )]  &    si\,\,\, x, y \,\, \in[-1,1]\\ 
+ 0 & \text{ en otro caso }
+\end{cases}
+$$
+Simular dicha distribucion bidimensinal mediante el metodod e aceptacion rechazo  utilizando como densidad auxiliar una de mus sencilla  simulación, ¿Cuál es la eficiencia del algortimo? Existe algun otro método alternativo para simular esta distribucion, explicar brevemente.
+
+## Solucion 
+ Tomamos como densidad auxiliar $g(x,y)= 1/4$  si $x,y \, \in [-1,1]$
+ 
+ Como $f(x,y) \leq M$ tiene su vertice en el punto (0,0) tenemos que $f(0,0)=\frac{3}{8}$ ; luego tomando $c = \frac {M}{g(x,y)} = \frac{3}{2}$
+
+```{r}
+
+densidad_fxy <- function(x,y)
+{
+  (3/16)*(2-(x^2 +y^2))
+}
+
+#Método de aceptacion rechazo
+
+AR<- function(ngen=0){
+  copt<- 3/2
+  X<-c(length(2))
+  while (TRUE) {
+    U <- runif(1,0,1)
+    T1 <- runif(1,-1,1)
+    T2 <- runif(1,-1,1)# generaremos segun la densidad auxiliar
+    ngen <<- ngen+1 
+    if (U<=1-(T1^2+T2^2)/2 )
+      {
+      X<-c(T1,T2)
+      return (X)
+      }
+  }
+}
+x<-c(0,0)
+
+system.time(x <-replicate(100,AR()))
+ x1<-x[1,]
+ y1 <-x[2,]
+ 
+#Gráfico de dispersion
+ plot(x1, y1, main=" Diagrama de Dispersión")
+abline(lm(x1~y1), col="yellow")
+hist(x1)
+hist(y1)
+ 
+
+
+```
+
+## Conclusiones:
+Para una muestra de 100 observaciones vemos que en el grafico de dispercion para la variable "precio  " que corresponde a x1 y tiempo de vida"  que corresponde a y1 no esiste una correlacion pues no hay un patron entre las observaciones.
+
+El tiempo de ejecución del algoritmo es: 0.01 segundos
+
+
+# Ejercicio 2
+
+Dar una formulacion general de un algoritmo de inversion para una distribucion bidimensional
+
+## Solucion 
+Para llevar el algoritmo de inversion al caso multinomial, consideraremos que las copulas pueden facilitar la simulacion de una distribucion conjunta.
+
+Consideremos el caso bidimensional, asi sean $(U,V) \sim C(.,.)$ marginales uniformes es decir: 
+$({F_{1}}^{-1}(U),{F_{2}}^{-1}(V)) \sim F(.,.)$ funcion de distribucion conjunta.
+
+Notar que gracias al teorema de Sklar, para el caso bidimensional; se garantiza la existencia de la cupula C.
+
+### Teorema de Sklar
+
+Si $(X,Y)$ es una variable aleatoria bidimensional con función de distribución conjunta $F(.,.)$ y distribuciones marginales  $F_{1}(.,.) y F_{2}(.,.)$ respectivamente, entonces existe una cópula $C(.,.)$  tal que:
+$$F(x,y)=C(F_{1}(x),F_{2}(y)) \forall x,y\in\mathbb{R}$$
+
+Además, si $F_{1}(.),F_{2}(.)$ son continuas $C(.,.)$ es única.
+
+### Algoritmo de inversion
+
+1. Generar $U,W \sim \mathcal{U}(0,1)$
+2. Obtener $V = {C_{U}}^{-1}(W)$
+3. Devolver $({F_{1}}^{-1}(U),{F_{2}}^{-1}(V))$
+
+
+
+# Ejercicio 3
+
+La variable aleatorio bidimensional (X,Y)  que representa el numero de reinicios  de un sistema informatico  y el numero de utilizaciones del SAI (Sistema de alimentacion interrumpida) tiene la siguiente masa de probabilidad:
+
+\begin{array}{ | l | l | l | l | l | l | l | }
+\hline
+	P(X=i, Y=j) & i=0 & i=1 & i=2 & i=3 & i=4 & Total \\ \hline
+	j=0 & 0.15 & 0.23 & 0.06 & 0.03 & 0.01 & 0.48 \\ \hline
+	j=1 & 0.09 & 0.18 & 0.05 & 0.02 & 0 & 0.34 \\ \hline
+	j=2 & 0.01 & 0.05 & 0.11 & 0.01 & 0 & 0.18 \\ \hline
+	Total & 0.25 & 0.46 & 0.22 & 0.06 & 0.01 & \  \\ \hline
+\end{array}
+
+Dar un algoritmo para simular un par de variables (X,Y) comentar la eficinecia del metodo.¿Podría mejorar dicha eficiencia si buscamos simular unicamente la variable X?
+
+## Solucion 
+
+```{r}
+
+
+set.seed(1)
+# Conjunto de probabilidades marginales
+#matriz de probabilidades 
+
+
+
+fmp <-  c(0.15,0.23,0.06,0.03,0.01,0.09,0.18,0.05,0.02,0,0.01,0.05,0.11,0.01,0)
+margx<-c(0.40,0.34,0.18)
+margy<- c(0.25,0.46,0.22,0.06,0.01)
+x<-c(0,1,2)
+y<-c(0,1,2,3,4)
+
+rfmp <- function(x, prob = 1/length(x), nsim = 1000) {
+  # Simulación nsim v.a. discreta a partir de fmp
+  # por inversión generalizada (transformación cuantil)
+  # Inicializar FD
+  Fx <- cumsum(prob)
+  # Simular
+  X <- numeric(nsim)
+  Y <- numeric(nsim)
+  U <- runif(nsim)
+  for(j in 1:nsim) 
+  {
+   if (U[j] < Fx[1])
+   {X[j]=0
+    Y[j]=0}
+    
+   else if (Fx[1]<= U[j] & Fx[2]>U[j])
+   {X[j]=0
+    Y[j]=1}
+    else if (Fx[2]<= U[j] & Fx[3]>U[j])
+   {X[j]=0
+    Y[j]=2}
+    else if (Fx[3]<= U[j] & Fx[4]>U[j])
+   {X[j]=0
+    Y[j]=3}
+    else if (Fx[4]<= U[j] & Fx[5]>U[j])
+   {X[j]=0
+    Y[j]=4}
+    else if (Fx[5]<= U[j] & Fx[6]>U[j])
+   {X[j]=1
+    Y[j]=0}
+    else if (Fx[6]<= U[j] & Fx[7]>U[j])
+   {X[j]=1
+    Y[j]=1}
+    else if (Fx[7]<= U[j] & Fx[8]>U[j])
+   {X[j]=1
+    Y[j]=2}
+    else if (Fx[8]<= U[j] & Fx[9]>U[j])
+   {X[j]=1
+    Y[j]=3}    else if (Fx[9]<= U[j] & Fx[10]>U[j])
+   {X[j]=1
+    Y[j]=4}
+    else if (Fx[10]<= U[j] & Fx[11]>U[j])
+   {X[j]=2
+    Y[j]=0}
+    else if (Fx[11]<= U[j] & Fx[12]>U[j])
+   {X[j]=2
+    Y[j]=1}
+    else if (Fx[12]<= U[j] & Fx[13]>U[j])
+   {X[j]=2
+    Y[j]=2}
+    
+    else if (Fx[13]<= U[j] & Fx[14]>U[j])
+   {X[j]=2
+    Y[j]=3}
+    else if ( Fx[14]>=U[j])
+   {X[j]=2
+    Y[j]=4}
+
+  }
+  PARES = cbind(X,Y)
+  return(PARES)
+  
+}
+
+
+# Simular binomial
+set.seed(54321)
+
+nsim <- 1000
+
+
+fmp <-  c(0.15,0.23,0.06,0.03,0.01,0.09,0.18,0.05,0.02,0,0.01,0.05,0.11,0.01,0)
+ncomp <- 0
+system.time( rx <- rfmp(x, fmp, nsim) )
+X<- rx[,1]
+Y<- rx[,2]
+
+plot(X, Y, xlim=range(0:2), ylim=range(0:4), type="p")
+hist(X,col="red")
+hist(Y,col="blue")
+
+```
+
+## Conclusiones
+En este caso transformamos el problema a unc aso univariante , dando etiquetas para identificar los valores de x e Y para cada caso, esta simulacion fue hecha por el metodod e inversion para variables aleatorias discretas .El algoritmo lleva un tiemp de ejecucion de 0.11 segundos, si buscamos similar la variable x simulariamos menos casos pues solo considerariamos 3 comparaciones  en el codigo anterior, x lo que seria mas eficiente.
+
+
+# Ejercicio 4
+
+Considerando la variable aleatoria bidimensional (x,y) con funcion de densidad:
+ 
+$$f(x,y)= \left\{ \begin{array}{lcc}
+             \frac{3}{16}(2-(x^{2}+y^{2})) &   si \ x,y \in [-1,1] \\
+             \\ 0 &  en \ otro \ caso 
+             \end{array}
+   \right.$$
+
+y teniendo en cuenta que la densidad marginal de la variable X es:
+
+$$f_{X}(x)= \left\{ \begin{array}{lcc}
+             \frac{1}{8}(5-3x^{2}) &   si \ x \in [-1,1] \\
+             \\ 0 &  en \ otro \ caso 
+             \end{array}
+   \right.$$
+   
+Describir brevemente un algoritmo para simular el vector aleatorio, basado en el método de las distribuciones condicionadas (asumir que se dispone de un algoritmo para generar observaciones de las distribuciones unidimensionales de interes)
+
+
+## Solucion 
+
+Calculando $f_{Y}(y|x)=\frac{f(x,y)}{f_{X}(x)}$ se tiene que:
+
+$$f_{Y}(y|x)=\frac{\frac{3}{16}(2-(x^{2}+y^{2}))}{\frac{1}{8}(5-3x^{2})} = \frac{6-3x^{2}-3y^{2}}{10-6x^{2}} $$
+
+Como se asume que disponemos de algoritmos para generar las distribuciones unidimensionales $f_{X}(x)$ y $f_{Y}(y)$, se plantea el siguiente algoritmo.
+
+### Algoritmo Planteado
+
+1. Generar $X$ con densidad $f_{X}(x)=\frac{1}{8}(5-3x^{2})\mathbb{1}_{|x|\leq1}$
+2. Simular $Y$ con densidad $f_{Y}(y)=\frac{6-3x^{2}-3y^{2}}{10-6x^{2}} \mathbb{1}_{|y|\leq1}$
+3. Devolver $(X,Y)^{T}$

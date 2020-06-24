@@ -1,0 +1,278 @@
+---
+title: "Simulación Bootstrap"
+author: "Ivan Solorzano y Génesis Moreno"
+date: "14/7/2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+En el tema 2 se propuso el analisis de la aleatoriedad de un generador de numeros pseudo-aleatorios mediante el test de rachas, que se podría implementar repetidamente. Sin embargo, la aproximación asintótica empleada por la rutina runs.test de la librería tseries no es adecuada para tamaños muéstrales pequeños $(n<40)$  y sería preferible utilizar la distribución exacta (o por lo menos utilizar una corrección por continuidad).
+
+**a)Analizar el comportamiento del contraste empleando repetidamente el test de rachas, considerando 500 pruebas con muestras de tamaño 10 de una $Bernoulli(0.5)$. ¿Se observa algo extraño?**
+
+```{r}
+set.seed(1725)
+library(randtests)
+library(statip)
+n<-10
+nsim<-500
+theta<-0.5
+
+
+estadistico <- c(nsim)
+pvalor <- c(nsim)
+for(i in 1:nsim) {
+  x <- rbern(n,theta)
+  tmp<-runs.test(x)
+  
+  estadistico[i] <- tmp$statistic
+  pvalor[i] <- tmp$p.value
+  
+}
+
+hist(pvalor)
+hist(estadistico)
+
+```
+
+### Conclusiones 
+Vemos que para algunas pruebas realizadas la funcion run.test no se ejecuta, y no nos arroja un resultado para p-valor de algunas muestras, esto puede ser debido a que el test es para variables aleatorias continuas. Sin embargo si extraemos estos valores y sacamos una proporcion de rechazo para las veces que se pudo ejecutar el test tenemos: 
+
+```{r}
+#Eliminando los NaN
+pvalor<-pvalor[!is.na(pvalor)]
+cat("\nProporción de rechazos al 1% =", mean(pvalor < 0.01), "\n")
+  cat("Proporción de rechazos al 5% =", mean(pvalor < 0.05), "\n")
+  cat("Proporción de rechazos al 10% =", mean(pvalor < 0.1), "\n")
+```
+
+vemos que para $\alpha=0.01$ y $\alpha=0.05$  se rechaza mas veces de las que deberia x lo que se rechaza la hipotesis nula de aleatoriedad, asi mismo para $\alpha=0.10$ rechazamos menos veces de lo que deberiamos x lo que la hipoteisis nula tambien se rechazaria.
+
+**b)Realiza un programa que permita aproximar por simulación la función de masa de probabilidad del estadístico número de rachas (a partir de valores de una Bernoulli de media 0.5 . Representarla gráficamente y compararla con la densidad normal. Obtener los puntos críticos para contrastar la hipótesis nula de aleatoriedad para alpha 0,01,0,05,0.5. ¿Es esta dístribución adecuada para el contraste de aleatoriedad de variables continuas?¿Cual debería ser la probabilidad de obtener una única racha al aplicar el test a una variable continua?**
+
+```{r }
+library(bootstrap)
+datmed <- 0
+datsd<-1
+ndat <-100
+size <- 10
+theta <-0.5
+dat <- rbern(size,theta)
+nboot <- 500
+stat.dat <- mean(dat)
+#Generacion de las replicas bootstrap
+
+stat.boot <- numeric(nboot)
+dat.boot <- c(nboot)
+for (i in 1:nboot) {
+
+  dat.boot <- sample(dat, replace=TRUE)
+  stat.boot[i] <- mean(dat.boot)
+}
+
+# Valor esperado bootstrap del estadístico
+mean.boot <- mean(stat.boot)  
+mean.boot
+statho <-stat.boot-stat.dat
+hist(stat.boot-stat.dat, freq=FALSE, ylim = c(0,4))
+abline(v=mean.boot-stat.dat, lwd=2)
+
+# Distribución poblacional
+# Distribución teórica de stat.dat - stat.teor
+curve(dnorm(x, 0, datsd/sqrt(ndat)), lty=2, add=TRUE)   
+abline(v=0, lwd=2, lty=2)
+```
+
+
+A continuacion presentamos la obtensión de puntos críticos, para contrastar la hipotesis nula de aleatoriedad
+```{r}
+# Distribucion Bernoulli
+#Bajo la nula, 
+
+#estimando el valor crÃ�tico
+estadistico<-estadistico[!is.na(estadistico)]
+# para un nivel de alpha 0.01, 0.05,0.1
+vc1 <- quantile(estadistico,0.99) 
+vc2 <- quantile(estadistico,0.95)
+vc3 <- quantile(estadistico,0.90)
+
+```
+
+Tenemos que los valores criticos para alpha = 0,01 0,05 y 0,1 son respectivamente
+
+```{r}
+vc1
+vc2
+vc3
+#PROPORCION DE RECHAZOS
+mean(estadistico>=vc1)
+mean(estadistico>=vc2)
+mean(estadistico>=vc3)
+```
+
+Vemos que en los 3 casos se rechaza mas veces de las que deberia, por lo que podemos decir que el test rechaza la hipotesis de aleatoriedad, esto analizando con los valores criticos.
+La distribución, se acerca a una normal, siempre y cuando se aumente el tamaño de la muestra.
+
+Para la simulación de la función de masa de probabilidad del estadístico, también se puede realizar por métodos ya antes vistos, como por ejemplo, el metodo bootstrap.
+
+**c) Diseñar una rutina que permita realizar el contraste de aleatoriedad de una variable continua aproximando el p -valor por simulación. Asumir que la distribución del estadístico puede ser asimétrica, en cuyo caso el p-valor_ $p=2\min\left\{ P\left( R\leq\hat{R}\mid H_{0}\right) , P\left( R\geq \hat{R}\mid H_{0}\right) \right\}$.**
+```{r} 
+#Hipotesis alternativa R>1/2
+theta <- c(0.5,0.6,0.75,0.8,0.85)
+n <- 10
+m <- 500
+alpha <- 0.05
+estadistico1 <- c(m)
+pvalor1 <- c(m)
+pr1 <- vector(length = length(theta))
+par(mfrow=c(3,2))
+for(i in seq_along(theta)){
+    mat <- matrix(
+    rbern(n*m,theta[i]),
+    nrow = m,ncol=n)
+  #DistribuciÃ³n del estadÃ?stico
+  for (k in 1:m){
+  tmp<- runs.test(mat[k,])
+  estadistico1[k] <- tmp$statistic
+  pvalor1[k] <- tmp$p.value
+  }
+  pvalor1<-pvalor1[!is.na(pvalor1)]
+  #estimando el valor crÃ?tico
+  # para un nivel de alpha
+  #estadistico1<-estadistico1[!is.na(estadistico1)]
+  
+  hist(pvalor1)
+}
+par(mfrow=c(1,1))
+
+```
+
+Contrastando la hipotensis alternativa para R< 1/2
+
+```{r} 
+#Hipotesis alternativa R<1/2
+theta <- c(0.5,0.45,0.35,0.25,0.15)
+n <- 10
+m <- 500
+alpha <- 0.05
+estadistico2 <- c(m)
+pvalor2 <- c(m)
+par(mfrow=c(3,2))
+
+for(i in seq_along(theta)){
+    mat <- matrix(
+    rbern(n*m,theta[i]),
+    nrow = m,ncol=n)
+  #DistribuciÃ³n del estadÃ?stico
+  for (k in 1:m){
+  tmp<- runs.test(mat[k,])
+  estadistico2[k] <- tmp$statistic
+  pvalor2[k] <- tmp$p.value
+  }
+  pvalor2<-pvalor2[!is.na(pvalor2)]
+  #estimando el valor crÃ?tico
+  # para un nivel de alpha
+  #estadistico2<-estadistico2[!is.na(estadistico2)]
+  
+  hist(pvalor2)
+}
+par(mfrow=c(1,1))
+```
+```{r}
+p.valor<-function(pvalor1,pvalor2){
+  2*min(pvalor1,pvalor2)
+}
+p.valor(pvalor1,pvalor2)
+```
+
+**d)Diseñar una rutina que permita realizar el contraste de aleatoriedad de una variable continua aproximando el  p-valor mediante bootstrap.**
+
+```{r}
+size <- 10
+theta <-0.5
+nboot<-500
+dat <- rbern(size,theta)
+estadistico <- c(m)
+pvalor <- c(m)
+for (k in 1:nboot){
+  dat.boot <- sample(dat, replace=TRUE)
+  tmp<- runs.test(dat.boot)
+  estadistico[k] <- tmp$statistic
+  pvalor[k] <- tmp$p.value
+}
+pvalor<-pvalor[!is.na(pvalor)]
+hist(pvalor)
+```
+
+```{r}
+library(boot)
+
+nboot <- 500
+boot.f <- function(data, indices){
+  # data[indices] va a ser las muestras bootstrap
+  mean(data[indices])
+}
+
+#Hipotesis alternativa R>1/2
+theta <- c(0.5,0.6,0.75,0.8,0.85)
+n <- 10
+m <- 500
+alpha <- 0.05
+estadistico1 <- c(m)
+pvalor1 <- c(m)
+pr1 <- vector(length = length(theta))
+par(mfrow=c(3,2))
+for(i in seq_along(theta)){
+    mat <- matrix(
+    rbern(n*m,theta[i]),
+    nrow = m,ncol=n)
+    stat.boot <- boot(mat,boot.f,nboot)
+  #DistribuciÃ³n del estadÃ?stico
+  for (k in 1:m){
+  tmp<- runs.test(stat.boot$data[k,])
+  estadistico1[k] <- tmp$statistic
+  pvalor1[k] <- tmp$p.value
+  }
+  pvalor1<-pvalor1[!is.na(pvalor1)]
+  #estimando el valor crÃ?tico
+  # para un nivel de alpha
+  #estadistico1<-estadistico1[!is.na(estadistico1)]
+  
+  hist(pvalor1)
+}
+par(mfrow=c(1,1))
+
+```
+
+```{r} 
+#Hipotesis alternativa R<1/2
+theta <- c(0.5,0.45,0.35,0.25,0.15)
+n <- 10
+m <- 500
+alpha <- 0.05
+estadistico2 <- c(m)
+pvalor2 <- c(m)
+par(mfrow=c(3,2))
+
+for(i in seq_along(theta)){
+    mat <- matrix(
+    rbern(n*m,theta[i]),
+    nrow = m,ncol=n)
+    stat.boot <- boot(mat,boot.f,nboot)
+  #DistribuciÃ³n del estadÃ?stico
+  for (k in 1:m){
+  tmp<- runs.test(stat.boot$data[k,])
+  estadistico2[k] <- tmp$statistic
+  pvalor2[k] <- tmp$p.value
+  }
+  pvalor2<-pvalor2[!is.na(pvalor2)]
+  #estimando el valor crÃ?tico
+  # para un nivel de alpha
+  #estadistico2<-estadistico2[!is.na(estadistico2)]
+  
+  hist(pvalor2)
+}
+par(mfrow=c(1,1))
+```
